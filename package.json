@@ -1,0 +1,10 @@
+{
+  "name": "sabischolar-cbt",
+  "private": true,
+  "description": "SabiScholar CBT monorepo (backend + frontend).",
+  "scripts": {
+    "qa": "npm run qa:types && npm run qa:api",
+    "qa:api": "node scripts/qa-smoke.mjs",
+    "qa:types": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck"
+  }
+}
