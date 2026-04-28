@@ -17,7 +17,7 @@ export const RequestVerificationPage: React.FC<Props> = ({ authHeader, handleUna
   const submit = async () => {
     setBusy(true);
     try {
-      const { res, data } = await requestJson<{ ok?: boolean; token?: string; message?: string }>(
+      const { res, data } = await requestJson<{ ok?: boolean; token?: string; sent?: boolean; message?: string }>(
         `${API_BASE}/auth/request-verification`,
         {
           method: "POST",
@@ -29,8 +29,13 @@ export const RequestVerificationPage: React.FC<Props> = ({ authHeader, handleUna
         setStatus({ ok: false, text: data.message || "Could not request verification token." });
         return;
       }
-      setToken(data.token || "");
-      setStatus({ ok: true, text: "Verification token generated." });
+      if (data.sent) {
+        setToken("");
+        setStatus({ ok: true, text: "Check your email for a verification link." });
+      } else {
+        setToken(data.token || "");
+        setStatus({ ok: true, text: "Verification token generated (dev)." });
+      }
     } finally {
       setBusy(false);
     }
@@ -60,7 +65,7 @@ export const RequestVerificationPage: React.FC<Props> = ({ authHeader, handleUna
       ) : null}
       {token ? (
         <p style={{ marginBottom: 0, marginTop: 10, color: ss.muted, fontSize: "0.8125rem", wordBreak: "break-all" }}>
-          Dev token: <code>{token}</code>
+          Dev token (only when email is not configured): <code>{token}</code>
         </p>
       ) : null}
     </div>

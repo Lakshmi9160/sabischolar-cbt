@@ -85,6 +85,8 @@ export const App: React.FC = () => {
   const [authPassword, setAuthPassword] = useState("123456");
   const [authFullName, setAuthFullName] = useState("Demo Student");
   const [authSabiScholarUserId, setAuthSabiScholarUserId] = useState("");
+  const [authTargetExam, setAuthTargetExam] = useState<CatalogExam>("JAMB");
+  const [authTargetExamYear, setAuthTargetExamYear] = useState<number>(() => new Date().getFullYear());
   const [dashboard, setDashboard] = useState<{
     profile: {
       fullName: string;
@@ -224,6 +226,13 @@ export const App: React.FC = () => {
       setMessage("Please enter full name, email, and password.");
       return;
     }
+    const y = Math.trunc(Number(authTargetExamYear));
+    if (!Number.isFinite(y) || y < 2000 || y > 2100) {
+      setMessage("Exam year must be between 2000 and 2100.");
+      return;
+    }
+    const selectedSubjects =
+      authTargetExam === "JAMB" ? [...JAMB_MOCK_SUBJECT_CODES] : [...subjectsForExam(authTargetExam)];
     const { res, data } = await requestJson<{ token?: string; message?: string }>(`${API_BASE}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -232,9 +241,9 @@ export const App: React.FC = () => {
         password: authPassword,
         fullName: authFullName,
         sabischolarUserId: authSabiScholarUserId || null,
-        targetExam: "JAMB",
-        targetExamYear: 2026,
-        selectedSubjects: ["ENG", "MTH", "PHY", "BIO"]
+        targetExam: authTargetExam,
+        targetExamYear: y,
+        selectedSubjects
       })
     });
     if (res.ok) {
@@ -736,6 +745,21 @@ export const App: React.FC = () => {
     }
   };
 
+  const saveTargetProfile = async (exam: CatalogExam, year: number) => {
+    const { res, data } = await requestJson<{ ok?: boolean; message?: string }>(`${API_BASE}/auth/profile`, {
+      method: "PATCH",
+      headers: authHeader,
+      body: JSON.stringify({ targetExam: exam, targetExamYear: year })
+    });
+    if (handleUnauthorized(res)) return { ok: false, message: "Session expired. Please sign in again." };
+    if (!res.ok) return { ok: false, message: data.message || "Could not update profile." };
+    await loadDashboard();
+    setLeaderboardExamType(exam);
+    setStudyExamType(exam);
+    setStudySubject((prev) => normalizeCatalogSubject(exam, prev));
+    return { ok: true };
+  };
+
   useEffect(() => {
     if (token && location.pathname === "/dashboard") {
       void loadDashboard();
@@ -869,6 +893,10 @@ export const App: React.FC = () => {
                 setAuthEmail={setAuthEmail}
                 authPassword={authPassword}
                 setAuthPassword={setAuthPassword}
+                authTargetExam={authTargetExam}
+                setAuthTargetExam={setAuthTargetExam}
+                authTargetExamYear={authTargetExamYear}
+                setAuthTargetExamYear={setAuthTargetExamYear}
                 onLogin={() => void login()}
                 onRegister={() => void register()}
               />
@@ -916,6 +944,7 @@ export const App: React.FC = () => {
                   }}
                   studySubject={studySubject}
                   onStudySubjectChange={setStudySubject}
+                  onSaveTargetProfile={saveTargetProfile}
                 />
               )}
             </RequireAuth>

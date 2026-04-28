@@ -8,6 +8,20 @@ function clampQuestionLimit(raw: unknown): number {
 }
 
 export function mountCatalog(router: Router): void {
+  /** Canonical seeded subjects for an exam (JAMB / WAEC / NECO). */
+  router.get("/subjects", requireAuth, (req, res) => {
+    const raw = String(req.query.examType || "JAMB")
+      .trim()
+      .toUpperCase();
+    const examType = raw === "WAEC" || raw === "NECO" || raw === "JAMB" ? raw : "JAMB";
+    const rows = db
+      .prepare(
+        `SELECT exam_type, subject_code, subject_name FROM subjects WHERE exam_type = ? ORDER BY subject_code ASC`
+      )
+      .all(examType);
+    res.json({ subjects: rows });
+  });
+
   router.get("/questions", requireAuth, (req, res) => {
     const examType = String(req.query.examType || "JAMB");
     const subjectCode = String(req.query.subjectCode || "ENG");

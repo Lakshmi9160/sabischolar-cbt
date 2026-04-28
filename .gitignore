@@ -7,3 +7,7 @@ build/
 *.sqlite3
 backend/data/
 frontend/.vite/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/

@@ -55,6 +55,34 @@ function insertQuestion(row: SeedQuestion, year: number, suffix: string): void {
   );
 }
 
+/** Canonical subject rows aligned with frontend `catalogSubjects` / JAMB mock flows. */
+const SUBJECT_CATALOG: Array<{ examType: "JAMB" | "WAEC" | "NECO"; subjectCode: string; subjectName: string }> = [
+  { examType: "JAMB", subjectCode: "ENG", subjectName: "English Language" },
+  { examType: "JAMB", subjectCode: "MTH", subjectName: "Mathematics" },
+  { examType: "JAMB", subjectCode: "PHY", subjectName: "Physics" },
+  { examType: "JAMB", subjectCode: "BIO", subjectName: "Biology" },
+  { examType: "WAEC", subjectCode: "ENG", subjectName: "English Language" },
+  { examType: "WAEC", subjectCode: "BIO", subjectName: "Biology" },
+  { examType: "WAEC", subjectCode: "CHE", subjectName: "Chemistry" },
+  { examType: "NECO", subjectCode: "ENG", subjectName: "English Language" },
+  { examType: "NECO", subjectCode: "ECO", subjectName: "Economics" },
+  { examType: "NECO", subjectCode: "GOV", subjectName: "Government" }
+];
+
+export function ensureSubjectsCatalog(): void {
+  const sel = db.prepare("SELECT id FROM subjects WHERE exam_type = ? AND subject_code = ?");
+  const ins = db.prepare("INSERT INTO subjects (exam_type, subject_code, subject_name) VALUES (?, ?, ?)");
+  const upd = db.prepare("UPDATE subjects SET subject_name = ? WHERE exam_type = ? AND subject_code = ?");
+  for (const row of SUBJECT_CATALOG) {
+    const existing = sel.get(row.examType, row.subjectCode) as { id: number } | undefined;
+    if (existing) {
+      upd.run(row.subjectName, row.examType, row.subjectCode);
+    } else {
+      ins.run(row.examType, row.subjectCode, row.subjectName);
+    }
+  }
+}
+
 function ensureQuestionMinimum(examType: "JAMB" | "WAEC" | "NECO", subjectCode: string, minCount: number, template: SeedQuestion): void {
   const row = db
     .prepare("SELECT COUNT(*) as c FROM questions WHERE exam_type = ? AND subject_code = ?")
@@ -173,6 +201,8 @@ export function seedData(): void {
   seedRows.forEach((row) => byKey.set(`${row.examType}:${row.subjectCode}`, row));
 
   const tx = db.transaction(() => {
+    ensureSubjectsCatalog();
+
     // Initial light seed if database is empty.
     const count = db.prepare("SELECT COUNT(*) as c FROM questions").get() as { c: number };
     if (count.c === 0) {

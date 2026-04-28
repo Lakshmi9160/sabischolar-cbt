@@ -92,6 +92,23 @@ async function main() {
   if (!profRes.ok) fail(`profile ${profRes.status}`);
   if (typeof prof.is_admin !== "number" && typeof prof.is_admin !== "boolean") fail("profile is_admin");
 
+  const { res: patchProfRes, data: patchProf } = await j(`${base}/auth/profile`, {
+    method: "PATCH",
+    headers: auth,
+    body: JSON.stringify({ targetExam: "WAEC", targetExamYear: 2027 })
+  });
+  if (!patchProfRes.ok) fail(`profile patch ${patchProfRes.status} ${JSON.stringify(patchProf)}`);
+  if (!patchProf.ok) fail("profile patch missing ok");
+
+  const { res: profRes2, data: prof2 } = await j(`${base}/auth/profile`, { headers: auth });
+  if (!profRes2.ok) fail(`profile after patch ${profRes2.status}`);
+  if (String(prof2.target_exam || "").toUpperCase() !== "WAEC") {
+    fail(`profile target_exam expected WAEC got ${prof2.target_exam}`);
+  }
+  if (Number(prof2.target_exam_year) !== 2027) {
+    fail(`profile target_exam_year expected 2027 got ${prof2.target_exam_year}`);
+  }
+
   const { res: qRes, data: qd } = await j(`${base}/questions?examType=JAMB&subjectCode=ENG&limit=3`, { headers: auth });
   if (!qRes.ok) fail(`questions ${qRes.status}`);
   if (!Array.isArray(qd.questions) || qd.questions.length < 1) fail("questions empty");
@@ -127,6 +144,21 @@ async function main() {
   const { res: tRes, data: td } = await j(`${base}/topics?examType=JAMB&subjectCode=ENG`, { headers: auth });
   if (!tRes.ok) fail(`topics ${tRes.status}`);
   if (!Array.isArray(td.topics) || td.topics.length < 1) fail("topics empty");
+
+  const { res: subjectsJRes, data: sj } = await j(`${base}/subjects?examType=JAMB`, { headers: auth });
+  if (!subjectsJRes.ok) fail(`subjects ${subjectsJRes.status}`);
+  if (!Array.isArray(sj.subjects) || sj.subjects.length !== 4) {
+    fail(`subjects JAMB expected 4 rows got ${(sj.subjects || []).length}`);
+  }
+  const jambCodes = (sj.subjects || [])
+    .map((s) => String(s.subject_code || "").toUpperCase())
+    .sort()
+    .join(",");
+  if (jambCodes !== "BIO,ENG,MTH,PHY") fail(`subjects JAMB codes expected BIO,ENG,MTH,PHY got ${jambCodes}`);
+
+  const { res: subjectsWRes, data: sw } = await j(`${base}/subjects?examType=WAEC`, { headers: auth });
+  if (!subjectsWRes.ok) fail(`subjects WAEC ${subjectsWRes.status}`);
+  if (!Array.isArray(sw.subjects) || sw.subjects.length !== 3) fail("subjects WAEC expected 3 rows");
 
   const { res: mRes, data: mock } = await j(`${base}/sessions`, {
     method: "POST",
@@ -323,12 +355,13 @@ async function main() {
     const v = pm[k];
     if (typeof v !== "number") fail(`dashboard predictedMockPercentByExam.${k} expected number got ${v}`);
   }
+  const weakScope = String(dash?.profile?.targetExam || "").trim().toUpperCase();
   for (const w of dash.weakTopics) {
     if (typeof w.total !== "number" || typeof w.correct !== "number") fail("weakTopics row");
     if (!("topic_name" in w)) fail("weakTopics missing topic_name");
     const et = w.exam_type != null ? String(w.exam_type).trim().toUpperCase() : "";
-    if (et !== "" && et !== "JAMB") {
-      fail(`weakTopics should match targetExam JAMB sessions only; got exam_type ${w.exam_type}`);
+    if (et !== "" && weakScope && et !== weakScope) {
+      fail(`weakTopics should match targetExam ${weakScope} sessions only; got exam_type ${w.exam_type}`);
     }
   }
 
@@ -363,7 +396,9 @@ async function main() {
     headers: auth
   });
   if (!verRes.ok) fail(`request-verification ${verRes.status}`);
-  if (!ver.token) fail("dev verification token missing");
+  if (!ver.token && ver.sent !== true) {
+    fail("request-verification: expected dev token or sent:true (configure SMTP?)");
+  }
 
   const resetEmail = { email };
   const { res: prRes, data: pr } = await j(`${base}/auth/request-password-reset`, {
@@ -372,7 +407,9 @@ async function main() {
     body: JSON.stringify(resetEmail)
   });
   if (!prRes.ok) fail(`password-reset-request ${prRes.status}`);
-  if (!pr.token) fail("dev reset token missing");
+  if (!pr.token && pr.sent !== true) {
+    fail("password-reset-request: expected dev token or sent:true (configure SMTP?)");
+  }
 
   const adminEmail = process.env.QA_ADMIN_EMAIL?.trim();
   const adminPassword = process.env.QA_ADMIN_PASSWORD;

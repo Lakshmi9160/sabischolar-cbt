@@ -23,6 +23,7 @@ Use this checklist for manual verification before release. Items marked **[x]** 
 
 - [x] `GET /api/cbt/v1/questions` returns filtered questions for exam/subject/topic (smoke script).
 - [x] `GET /api/cbt/v1/topics` returns topic counts for subject drill setup (smoke script).
+- [x] `subjects` table is populated on seed (`ensureSubjectsCatalog` in `backend/src/seed.ts`); `GET /api/cbt/v1/subjects?examType=` returns seeded rows (smoke script).
 - [x] Seed data minimums are satisfied (JAMB core ≥25 each; WAEC/NECO seeded subjects ≥20 each) — enforced in `backend/src/seed.ts` (`JAMB_MIN_PER_SUBJECT`, `WAEC_NECO_MIN_PER_SUBJECT`); JAMB mock creation of 100 questions succeeds in smoke test.
 
 ## D. Session engine
@@ -120,7 +121,7 @@ set QA_API_BASE=http://localhost:4000/api/cbt/v1
 node scripts/qa-smoke.mjs
 ```
 
-The script registers a throwaway user, exercises auth, questions, topics, mock/study/drill sessions, progress, answers (including instant-explanation payload), timed auto-submit, submit, result, dashboard, leaderboard, dev verification + password-reset tokens, `GET /sessions/active`, and non-admin **403** on admin list. It also verifies drill session options persisted in `/sessions/active` (`explanationMode` + `lightTimerEnabled`). With **`QA_ADMIN_EMAIL`** and **`QA_ADMIN_PASSWORD`** set, it also logs in as admin, asserts **`GET /admin/questions?examType=JAMB&subjectCode=ENG`** returns only JAMB/ENG rows, then runs **GET** + idempotent **PUT**, **POST**, and **PATCH** on `/admin/questions`.
+The script registers a throwaway user, exercises auth, questions, topics, **`GET /subjects`** (JAMB + WAEC catalog rows), mock/study/drill sessions, progress, answers (including instant-explanation payload), timed auto-submit, submit, result, dashboard, leaderboard, dev verification + password-reset tokens, `GET /sessions/active`, and non-admin **403** on admin list. It also verifies drill session options persisted in `/sessions/active` (`explanationMode` + `lightTimerEnabled`). With **`QA_ADMIN_EMAIL`** and **`QA_ADMIN_PASSWORD`** set, it also logs in as admin, asserts **`GET /admin/questions?examType=JAMB&subjectCode=ENG`** returns only JAMB/ENG rows, then runs **GET** + idempotent **PUT**, **POST**, and **PATCH** on `/admin/questions`.
 
 Latest automated signoff run in this repo:
 

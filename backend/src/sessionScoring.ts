@@ -186,29 +186,80 @@ export function finalizeSession(sessionId: number, userId: number) {
     percentage: Number(((v.correct / Math.max(v.total, 1)) * 100).toFixed(1))
   }));
 
-  db.prepare(
-    `UPDATE exam_sessions
-       SET status = 'submitted',
-           submitted_at = CURRENT_TIMESTAMP,
-           score = ?,
-           total_questions = ?,
-           percentage = ?,
-           pass_fail = ?,
-           subject_breakdown_json = ?,
-           topic_breakdown_json = ?,
-           time_per_question_json = ?
-     WHERE id = ? AND user_id = ?`
-  ).run(
-    correct,
-    total,
-    percentage,
-    passFail,
-    JSON.stringify(subjectBreakdown),
-    JSON.stringify(topicBreakdown),
-    JSON.stringify(timePerQuestion),
-    sessionId,
-    userId
-  );
+  const saveStatsTx = db.transaction(() => {
+    db.prepare(
+      `UPDATE exam_sessions
+         SET status = 'submitted',
+             submitted_at = CURRENT_TIMESTAMP,
+             score = ?,
+             total_questions = ?,
+             percentage = ?,
+             pass_fail = ?,
+             subject_breakdown_json = ?,
+             topic_breakdown_json = ?,
+             time_per_question_json = ?
+       WHERE id = ? AND user_id = ?`
+    ).run(
+      correct,
+      total,
+      percentage,
+      passFail,
+      JSON.stringify(subjectBreakdown),
+      JSON.stringify(topicBreakdown),
+      JSON.stringify(timePerQuestion),
+      sessionId,
+      userId
+    );
+
+    const submittedAt = db
+      .prepare("SELECT submitted_at FROM exam_sessions WHERE id = ?")
+      .get(sessionId) as { submitted_at: string } | undefined;
+    const submittedAtIso = submittedAt?.submitted_at ?? new Date().toISOString();
+
+    db.prepare(
+      `INSERT INTO session_stats
+         (session_id, user_id, exam_type, mode, score, total_questions, percentage, pass_fail, submitted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(session_id) DO UPDATE SET
+         score = excluded.score,
+         total_questions = excluded.total_questions,
+         percentage = excluded.percentage,
+         pass_fail = excluded.pass_fail,
+         submitted_at = excluded.submitted_at`
+    ).run(sessionId, userId, session.exam_type, session.mode, correct, total, percentage, passFail, submittedAtIso);
+
+    const upsertTopic = db.prepare(
+      `INSERT INTO topic_stats
+         (session_id, user_id, exam_type, mode, subject_code, topic_id, topic_key, total, correct, percentage, submitted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(session_id, topic_key) DO UPDATE SET
+         total = excluded.total,
+         correct = excluded.correct,
+         percentage = excluded.percentage,
+         submitted_at = excluded.submitted_at`
+    );
+
+    db.prepare("DELETE FROM topic_stats WHERE session_id = ?").run(sessionId);
+
+    for (const row of topicBreakdown) {
+      const topicKey = `${row.subject_code}:${row.topic_id ?? "none"}`;
+      upsertTopic.run(
+        sessionId,
+        userId,
+        session.exam_type,
+        session.mode,
+        row.subject_code,
+        row.topic_id,
+        topicKey,
+        row.total,
+        row.correct,
+        row.percentage,
+        submittedAtIso
+      );
+    }
+  });
+
+  saveStatsTx();
 
   return {
     sessionId,

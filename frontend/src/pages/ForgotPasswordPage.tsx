@@ -17,7 +17,7 @@ export const ForgotPasswordPage: React.FC = () => {
     }
     setBusy(true);
     try {
-      const { res, data } = await requestJson<{ ok?: boolean; token?: string; message?: string }>(
+      const { res, data } = await requestJson<{ ok?: boolean; token?: string; sent?: boolean; message?: string }>(
         `${API_BASE}/auth/request-password-reset`,
         {
           method: "POST",
@@ -29,8 +29,22 @@ export const ForgotPasswordPage: React.FC = () => {
         setStatus({ ok: false, text: data.message || "Could not request reset." });
         return;
       }
-      setDevToken(data.token || "");
-      setStatus({ ok: true, text: "Reset request submitted. Use your token on the reset screen." });
+      if (data.sent) {
+        setDevToken("");
+        setStatus({
+          ok: true,
+          text: "If an account exists for that address, we sent reset instructions to your email."
+        });
+      } else if (data.token) {
+        setDevToken(data.token);
+        setStatus({ ok: true, text: "Reset request submitted. Use your token on the reset screen (dev)." });
+      } else {
+        setDevToken("");
+        setStatus({
+          ok: true,
+          text: "If an account exists for that address, we sent reset instructions."
+        });
+      }
     } finally {
       setBusy(false);
     }

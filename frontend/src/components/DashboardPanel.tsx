@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { CatalogExam } from "../catalogSubjects";
 import { normalizeCatalogSubject, subjectsForExam } from "../catalogSubjects";
@@ -54,6 +54,8 @@ type Props = {
   onStudyExamTypeChange: (exam: CatalogExam) => void;
   studySubject: string;
   onStudySubjectChange: (subject: string) => void;
+  /** Persist target exam + year (countdown, weak topics scope, leaderboard default). */
+  onSaveTargetProfile?: (exam: CatalogExam, year: number) => Promise<{ ok: boolean; message?: string }>;
 };
 
 const card: React.CSSProperties = {
@@ -224,12 +226,38 @@ export const DashboardPanel: React.FC<Props> = ({
   studyExamType,
   onStudyExamTypeChange,
   studySubject,
-  onStudySubjectChange
+  onStudySubjectChange,
+  onSaveTargetProfile
 }) => {
   const { examCountdown, streakDays, recentSessions, weakTopics, profile, predictedMockPercentByExam } = dashboard;
 
   const streakSlots = 14;
   const filled = Math.min(streakDays, streakSlots);
+
+  const normProfileExam = (e: string | null | undefined): CatalogExam => {
+    const t = (e || "JAMB").toUpperCase();
+    return t === "WAEC" || t === "NECO" ? t : "JAMB";
+  };
+
+  const [targetDraftExam, setTargetDraftExam] = useState<CatalogExam>(() => normProfileExam(profile?.targetExam));
+  const [targetDraftYear, setTargetDraftYear] = useState<number>(() =>
+    typeof profile?.targetExamYear === "number" && Number.isFinite(profile.targetExamYear)
+      ? profile.targetExamYear
+      : new Date().getFullYear()
+  );
+  const [targetSaveBusy, setTargetSaveBusy] = useState(false);
+  const [targetSaveMsg, setTargetSaveMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTargetDraftExam(normProfileExam(profile?.targetExam));
+    const y = profile?.targetExamYear;
+    setTargetDraftYear(typeof y === "number" && Number.isFinite(y) ? y : new Date().getFullYear());
+  }, [profile?.targetExam, profile?.targetExamYear]);
+
+  const profileYear = profile?.targetExamYear;
+  const targetUnchanged =
+    normProfileExam(profile?.targetExam) === targetDraftExam &&
+    (typeof profileYear === "number" && Number.isFinite(profileYear) ? profileYear : null) === targetDraftYear;
 
   return (
     <div style={{ maxWidth: 720 }}>
@@ -267,6 +295,96 @@ export const DashboardPanel: React.FC<Props> = ({
           Request verification token
         </Link>
       </div>
+
+      {onSaveTargetProfile ? (
+        <div style={{ ...card, marginBottom: "1rem" }}>
+          <div
+            style={{
+              fontSize: "0.8125rem",
+              fontWeight: 600,
+              color: ss.muted,
+              marginBottom: 10,
+              textTransform: "uppercase",
+              letterSpacing: "0.04em"
+            }}
+          >
+            Target exam
+          </div>
+          <p style={{ fontSize: "0.8125rem", color: ss.muted, margin: "0 0 12px", lineHeight: 1.45 }}>
+            Sets your dashboard countdown, weak-topic focus, and default leaderboard filter.
+          </p>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              alignItems: "flex-end",
+              marginBottom: targetSaveMsg ? 10 : 0
+            }}
+          >
+            <div className="ss-field" style={{ marginBottom: 0, minWidth: 140 }}>
+              <label htmlFor="dash-target-exam">Exam</label>
+              <select
+                id="dash-target-exam"
+                value={targetDraftExam}
+                onChange={(e) => setTargetDraftExam(e.target.value as CatalogExam)}
+                disabled={targetSaveBusy}
+              >
+                <option value="JAMB">JAMB</option>
+                <option value="WAEC">WAEC</option>
+                <option value="NECO">NECO</option>
+              </select>
+            </div>
+            <div className="ss-field" style={{ marginBottom: 0, minWidth: 120 }}>
+              <label htmlFor="dash-target-year">Year</label>
+              <input
+                id="dash-target-year"
+                type="number"
+                min={2000}
+                max={2100}
+                value={targetDraftYear}
+                onChange={(e) => setTargetDraftYear(Number(e.target.value))}
+                disabled={targetSaveBusy}
+              />
+            </div>
+            <button
+              type="button"
+              className="ss-btn ss-btn--primary"
+              disabled={targetSaveBusy || targetUnchanged}
+              onClick={() => {
+                void (async () => {
+                  setTargetSaveMsg(null);
+                  setTargetSaveBusy(true);
+                  try {
+                    const y = Math.trunc(Number(targetDraftYear));
+                    if (!Number.isFinite(y) || y < 2000 || y > 2100) {
+                      setTargetSaveMsg("Year must be between 2000 and 2100.");
+                      return;
+                    }
+                    const r = await onSaveTargetProfile(targetDraftExam, y);
+                    setTargetSaveMsg(r.ok ? "Saved." : r.message || "Could not save.");
+                  } finally {
+                    setTargetSaveBusy(false);
+                  }
+                })();
+              }}
+            >
+              {targetSaveBusy ? "Saving…" : "Save target"}
+            </button>
+          </div>
+          {targetSaveMsg ? (
+            <p
+              style={{
+                fontSize: "0.8125rem",
+                margin: "8px 0 0",
+                color: targetSaveMsg === "Saved." ? ss.success : ss.danger
+              }}
+            >
+              {targetSaveMsg}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div style={{ display: "grid", gap: 0, gridTemplateColumns: "1fr" }}>
         {examCountdown ? (

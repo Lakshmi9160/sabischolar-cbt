@@ -1,0 +1,9 @@
+.git
+.github
+**/node_modules
+frontend/dist
+backend/dist
+backend/data
+e2e/test-results
+playwright-report
+blob-report

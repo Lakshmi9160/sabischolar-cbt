@@ -36,6 +36,7 @@ export function initDb(): void {
       subject_code TEXT NOT NULL,
       subject_name TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_subjects_exam ON subjects(exam_type);
 
     CREATE TABLE IF NOT EXISTS email_verification_tokens (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,6 +123,37 @@ export function initDb(): void {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(session_id, question_id)
     );
+
+    CREATE TABLE IF NOT EXISTS session_stats (
+      session_id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      exam_type TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      score INTEGER NOT NULL,
+      total_questions INTEGER NOT NULL,
+      percentage REAL NOT NULL,
+      pass_fail TEXT NOT NULL,
+      submitted_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_session_stats_user_exam ON session_stats(user_id, exam_type, submitted_at);
+
+    CREATE TABLE IF NOT EXISTS topic_stats (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      exam_type TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      subject_code TEXT NOT NULL,
+      topic_id INTEGER,
+      topic_key TEXT NOT NULL,
+      total INTEGER NOT NULL,
+      correct INTEGER NOT NULL,
+      percentage REAL NOT NULL,
+      submitted_at TEXT NOT NULL,
+      UNIQUE(session_id, topic_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_topic_stats_user_exam ON topic_stats(user_id, exam_type, submitted_at);
+    CREATE INDEX IF NOT EXISTS idx_topic_stats_user_topic ON topic_stats(user_id, subject_code, topic_id);
   `);
 
   // Lightweight forward-compatible migrations for existing local databases.

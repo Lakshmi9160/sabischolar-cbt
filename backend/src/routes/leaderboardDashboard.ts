@@ -81,7 +81,22 @@ export function mountLeaderboardDashboard(router: Router): void {
     const weakExamScope =
       targetNorm === "JAMB" || targetNorm === "WAEC" || targetNorm === "NECO" ? targetNorm : null;
 
-    const weakTopicsSql = `SELECT q.topic_id,
+    // Prefer rollups from topic_stats for speed; fallback to live aggregation for older DBs.
+    const weakFromRollupSql = `SELECT ts.topic_id,
+              MAX(t.topic_name) AS topic_name,
+              MAX(ts.subject_code) AS subject_code,
+              MAX(ts.exam_type) AS exam_type,
+              SUM(ts.total) AS total,
+              SUM(ts.correct) AS correct
+       FROM topic_stats ts
+       LEFT JOIN topics t ON t.id = ts.topic_id
+       WHERE ts.user_id = ?
+       __WEAK_EXAM_FILTER__
+       GROUP BY ts.topic_key
+       ORDER BY (CAST(SUM(ts.correct) AS REAL) / SUM(ts.total)) ASC
+       LIMIT 3`;
+
+    const weakFromAnswersSql = `SELECT q.topic_id,
               MAX(t.topic_name) AS topic_name,
               MAX(t.subject_code) AS subject_code,
               MAX(t.exam_type) AS exam_type,
@@ -97,11 +112,20 @@ export function mountLeaderboardDashboard(router: Router): void {
        ORDER BY (CAST(SUM(CASE WHEN sa.is_correct = 1 THEN 1 ELSE 0 END) AS REAL) / COUNT(*)) ASC
        LIMIT 3`;
 
-    const weakTopics = weakExamScope
+    const weakTopicsFromRollup = weakExamScope
       ? db
-          .prepare(weakTopicsSql.replace("__WEAK_EXAM_FILTER__", "AND s.exam_type = ?"))
+          .prepare(weakFromRollupSql.replace("__WEAK_EXAM_FILTER__", "AND ts.exam_type = ?"))
           .all(userId, weakExamScope)
-      : db.prepare(weakTopicsSql.replace("__WEAK_EXAM_FILTER__", "")).all(userId);
+      : db.prepare(weakFromRollupSql.replace("__WEAK_EXAM_FILTER__", "")).all(userId);
+
+    const weakTopics =
+      Array.isArray(weakTopicsFromRollup) && weakTopicsFromRollup.length > 0
+        ? weakTopicsFromRollup
+        : weakExamScope
+          ? db
+              .prepare(weakFromAnswersSql.replace("__WEAK_EXAM_FILTER__", "AND s.exam_type = ?"))
+              .all(userId, weakExamScope)
+          : db.prepare(weakFromAnswersSql.replace("__WEAK_EXAM_FILTER__", "")).all(userId);
 
     const submittedRows = db
       .prepare(`SELECT submitted_at FROM exam_sessions WHERE user_id = ? AND status = 'submitted' AND submitted_at IS NOT NULL`)

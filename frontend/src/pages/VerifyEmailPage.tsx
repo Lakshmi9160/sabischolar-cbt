@@ -1,13 +1,21 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { API_BASE } from "../api";
 import { requestJson } from "../apiClient";
 import { ss } from "../theme";
 
 export const VerifyEmailPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    const t = searchParams.get("token");
+    if (t && t.trim()) {
+      setToken(t.trim());
+    }
+  }, [searchParams]);
 
   const submit = async () => {
     if (!token.trim()) {

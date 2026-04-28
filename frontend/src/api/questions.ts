@@ -10,6 +10,20 @@ export type CatalogTopicRow = {
   question_count: number;
 };
 
+export type CatalogSubjectRow = {
+  exam_type: string;
+  subject_code: string;
+  subject_name: string;
+};
+
+export async function fetchCatalogSubjects(
+  authHeader: Record<string, string>,
+  params: { examType: string }
+): Promise<{ res: Response; data: { subjects?: CatalogSubjectRow[]; message?: string } }> {
+  const q = new URLSearchParams({ examType: params.examType });
+  return requestJson(`${API_BASE}/subjects?${q}`, { headers: authHeader });
+}
+
 export async function fetchCatalogTopics(
   authHeader: Record<string, string>,
   params: { examType: string; subjectCode: string }

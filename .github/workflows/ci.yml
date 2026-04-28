@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  types-and-api-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix backend
+          npm ci --prefix frontend
+
+      - name: Typecheck
+        run: npm run qa:types
+
+      - name: API smoke (backend + qa-smoke)
+        run: |
+          mkdir -p backend/data
+          printf '%s\n' \
+            'JWT_SECRET=ci_smoke_jwt_secret_not_for_production' \
+            'DB_PATH=./data/cbt.sqlite' \
+            'PORT=4000' \
+            'NODE_ENV=test' \
+            > backend/.env
+          (cd backend && npm run dev) &
+          npx wait-on -t 60000 -v http://127.0.0.1:4000/api/cbt/v1/health
+          npm run qa:api
